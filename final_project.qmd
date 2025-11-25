@@ -1,0 +1,220 @@
+---
+title: "PSTAT 220A Final Project"
+subtitle: "Analysing Poverty"
+author: "Soumyajit De"
+date: "November 22, 2025"
+format: pdf
+---
+
+RQ1. How is county-level poverty (percentage of individuals under the poverty level) associated with county demographic, geographic, and socioeconomic characteristics, including gender, race/ethnicity, employment sectors, commuting patterns, employment type, unemployment, education, and average age? Specifically, which of these variables appear to be most strongly associated with poverty, and which (if any) show little or no predictive value?
+
+RQ2: To what extent is county-level poverty associated with the gender composition of the population, and does this association differ between counties in California and Texas?
+
+``` {r}
+                                            # load the dataset
+pvt_d <- read.csv("/Users/desoumyajit99/Desktop/projects/pstat-220a/final_project/poverty_data.csv")
+
+                                            # check for mean, maxima, and minima
+summary(pvt_d)
+
+                                        #look for missing values
+sum(is.na(pvt_d)) #total number of NAs
+colSums(is.na(pvt_d)) #NAs in each variable
+
+                                            #composition check
+                            #look into all the variables that have percentages
+# set a toleramce of error
+tol <- 0.5
+                                            #Group: Race
+#row-wise sum
+pvt_d$race_sum <- pvt_d$Hispanic +
+                  pvt_d$White +
+                  pvt_d$Black +
+                  pvt_d$Native +
+                  pvt_d$Asian +
+                  pvt_d$Pacific
+
+#does it add up to ~100?
+pvt_d$race_ok <- abs(pvt_d$race_sum - 100) <= tol
+
+#see how many rows are ok vs not
+table(pvt_d$race_ok, useNA = "ifany")
+
+# the problematic rows
+pvt_d[!pvt_d$race_ok & !is.na(pvt_d$race_ok), c("State", "County", "race_sum", "Hispanic", "White", "Black", "Native", "Asian", "Pacific")]
+
+                                            #Group:  Employment sectors
+#row-wise sum
+pvt_d$sector_sum <- pvt_d$Professional +
+                    pvt_d$Service +
+                    pvt_d$Office +
+                    pvt_d$Construction +
+                    pvt_d$Production
+
+#does it add up to ~100?
+pvt_d$sector_ok <- abs(pvt_d$sector_sum - 100) <= tol
+
+#see how many rows are ok vs not
+table(pvt_d$sector_ok, useNA = "ifany")
+
+# the problematic rows
+pvt_d[!pvt_d$sector_ok & !is.na(pvt_d$sector_ok), c("State", "County", "sector_sum","Professional", "Service", "Office", "Construction", "Production")]
+
+                                            #Group: Transportation
+#row-wise sum
+pvt_d$transport_sum <- pvt_d$Drive +
+                       pvt_d$Carpool +
+                       pvt_d$Transit +
+                       pvt_d$Walk +
+                       pvt_d$OtherTransp +
+                       pvt_d$WorkAtHome
+
+#does it add up to ~100?
+pvt_d$transport_ok <- abs(pvt_d$transport_sum - 100) <= tol
+
+#see how many rows are ok vs not
+table(pvt_d$transport_ok, useNA = "ifany")
+
+# the problematic rows
+pvt_d[!pvt_d$transport_ok & !is.na(pvt_d$transport_ok), c("State", "County", "transport_sum", "Drive", "Carpool", "Transit", "Walk", "OtherTransp", "WorkAtHome")]
+
+                                            #Group: Type of work / employer
+#row-wise sum
+pvt_d$worktype_sum <- pvt_d$PrivateWork +
+                      pvt_d$PublicWork +
+                      pvt_d$SelfEmployed +
+                      pvt_d$FamilyWork
+
+#does it add up to ~100?
+pvt_d$worktype_ok <- abs(pvt_d$worktype_sum - 100) <= tol
+
+#see how many rows are ok vs not
+table(pvt_d$worktype_ok, useNA = "ifany")
+
+# the problematic rows
+pvt_d[!pvt_d$worktype_ok & !is.na(pvt_d$worktype_ok), c("State", "County", "worktype_sum", "PrivateWork", "PublicWork", "SelfEmployed", "FamilyWork")]
+
+                                            #Group: Education
+#row-wise sum
+pvt_d$educ_sum <- pvt_d$LessThanHighSchool +
+                  pvt_d$HighSchoolDiploma +
+                  pvt_d$SomeCollegeOrAssociateDegree +
+                  pvt_d$BachelorDegreeOrHigher
+
+#does it add up to ~100?
+pvt_d$educ_ok <- ifelse(is.na(pvt_d$educ_sum), NA, abs(pvt_d$educ_sum - 100) <= tol)
+
+#see how many rows are ok vs not
+table(pvt_d$educ_ok, useNA = "ifany")
+
+# the problematic rows
+pvt_d[!pvt_d$educ_ok & !is.na(pvt_d$educ_ok),
+      c("State", "County", "educ_sum",
+        "LessThanHighSchool", "HighSchoolDiploma",
+        "SomeCollegeOrAssociateDegree", "BachelorDegreeOrHigher")]
+
+# 8 missing rows
+# Indices of the 8 counties with missing education data
+idx_educ_na <- which(is.na(pvt_d$educ_ok))
+
+# See their state + county names
+pvt_d[idx_educ_na, c("State", "County")]
+
+sum(is.na(pvt_d)) #total number of NAs
+colSums(is.na(pvt_d)) #NAs in each variable
+
+# see all the NAs
+na_rows <- pvt_d[rowSums(is.na(pvt_d)) > 0, ]
+
+```
+
+Variable notes (grouped for later modeling)
+
+From the last page of the project description: 
+
+final_project
+
+You can keep this grouping in your Methods section to explain what you used.
+
+4.1 Location 
+- State: State abbreviation.
+- County: County name.
+
+4.2 Geography
+- Long: longitde of eacg county 
+- Lat: latitude of each county 
+
+4.2 Outcome
+
+- Poverty:
+- Definition: % of population under the poverty level in the county.
+- Role: Main dependent variable in all analyses.
+
+4.3 Population size 
+
+- TotalPop:
+- Total population in the county.
+- Potential uses: Descriptive context (how big are counties?).
+- Checking whether very small-population counties behave differently.
+- Weighting (if you decide to comment on that, even if you don’t actually use weights).
+
+4.4 Gender
+- Men: Number of men. (reference)
+- Women: Number of women.
+- For regression you’ll likely use proportions (e.g., Women / TotalPop), and treat one gender as implied by the other to avoid collinearity.
+
+4.5 Race/Ethnicity
+(all expressed as percent of population)
+- Hispanic – % Hispanic/Latino. (reference)
+- White – % White. 
+- Black – % Black.
+- Native – % Native American or Native Alaskan.
+- Asian – % Asian.
+- Pacific – % Native Hawaiian or Pacific Islander.
+- For modeling, these form a composition (percentages sum to ~100%), so you will later choose a reference category (e.g., White) and include the others relative to that.
+
+4.6 Employment sectors
+- Professional – % employed in professional areas. (reference)
+- Service – % employed in service jobs.
+- Office – % employed in sales and office jobs.
+- Construction – % employed in construction.
+- Production – % employed in production.
+
+Again, these may be compositional for employment sectors; in regression, you may include all but one as contrasts with a reference sector.
+
+4.7 Transportation to work
+(all expressed as percent of workers using each mode)
+- Drive – % commuting alone in a car. (Reference)
+- Carpool – % commuting by carpool.
+- Transit – % commuting via public transportation.
+- Walk – % walking to work.
+- OtherTransp – % using other means of transportation.
+- WorkAtHome – % working from home.
+
+These describe commute patterns; they may also behave compositionally (sum to 100%).
+
+4.8 Type of work / employer
+(all expressed as percent of employed population) 
+- PrivateWork – % employed in private industry. (reference)
+- PublicWork – % employed in public jobs.
+- SelfEmployed – % self-employed.
+- FamilyWork – % in unpaid family work.
+These capture the sector/ownership structure of employment in the county.
+
+4.9 Economic conditions
+- Unemployment: % unemployed (unemployment rate).
+
+4.10 Education
+(all expressed as percent of adults in each education category)
+- LessThanHighSchool – % of adults with less than a high school diploma. (Reference)
+- HighSchoolDiploma – % of adults with a high school diploma only.
+- SomeCollegeOrAssociateDegree – % of adults completing some college or an associate degree.
+- BachelorDegreeOrHigher – % of adults with a bachelor’s degree or higher.
+These clearly form a composition over educational attainment. In regression, you’ll likely choose one as the reference and include the others to avoid perfect collinearity.
+
+4.11 Age
+- AvgAge: Average age in the county.
+This is a single continuous measure summarizing the age structure.
+
+4.12 Mean Commute Time
+- MeanCommute: Mean commute time (minutes).
