@@ -11,8 +11,14 @@ RQ1. How is county-level poverty (percentage of individuals under the poverty le
 RQ2: To what extent is county-level poverty associated with the gender composition of the population, and does this association differ between counties in California and Texas?
 
 ``` {r}
+#list all the libraries
+library(tidyverse)
+library(colorspace)
+library(ggplot2)
+```
+``` {r}
                                             # load the dataset
-pvt_d <- read.csv("/Users/desoumyajit99/Desktop/projects/pstat-220a/final_project/poverty_data.csv")
+pvt_d <- read.csv("poverty_data.csv")
 
                                             # check for mean, maxima, and minima
 summary(pvt_d)
@@ -128,93 +134,293 @@ na_rows <- pvt_d[rowSums(is.na(pvt_d)) > 0, ]
 
 ```
 
-Variable notes (grouped for later modeling)
+```{r}
+#once again summary statistics
+summary(pvt_d)
 
-From the last page of the project description: 
+                              #start plotting
+                            # visualize the outcome variable first
 
-final_project
 
-You can keep this grouping in your Methods section to explain what you used.
+#density plot of poverty by state
+pov_bp <- pvt_d %>%
+          ggplot(aes(x = State, y = Poverty)) +
+          geom_boxplot(aes(fill = State)) +
+          scale_fill_discrete_qualitative() +
+          labs(title = "Poverty by State", x = "State", y = "Poverty (%)")
 
-4.1 Location 
-- State: State abbreviation.
-- County: County name.
+#density plot of poverty
+pov_dp <- pvt_d %>%
+          ggplot(aes(x = Poverty)) +
+          geom_density(aes(fill = after_stat(density)), alpha = 0.6) +
+          labs(title = "Density of County Poverty Rates", x = "Poverty (%)", y = "Density") +
+          theme_bw()
 
-4.2 Geography
-- Long: longitde of eacg county 
-- Lat: latitude of each county 
+          
+                            #economic and education variables
 
-4.2 Outcome
+#make a vector of those variables (make it easier for faceting)
+econ_educ_vars <- c("Unemployment","LessThanHighSchool","HighSchoolDiploma","SomeCollegeOrAssociateDegree","BachelorDegreeOrHigher","AvgAge","MeanCommute")
 
-- Poverty:
-- Definition: % of population under the poverty level in the county.
-- Role: Main dependent variable in all analyses.
 
-4.3 Population size 
+#density plot of economic and educational variables
+econ_edu_hist <- pvt_d %>%
+          pivot_longer(all_of(econ_educ_vars), names_to = "Variable", values_to = "Value") %>%
+                                  ggplot(aes(x = Value)) +
+                                  geom_density(aes(fill = after_stat(density))) +
+                                  facet_wrap(~ Variable, scales = "free") +
+                                  labs(title = "Distributions: Economic & Education Variables", x = "Percentage", y = "Count") +
+                                  theme_bw()
 
-- TotalPop:
-- Total population in the county.
-- Potential uses: Descriptive context (how big are counties?).
-- Checking whether very small-population counties behave differently.
-- Weighting (if you decide to comment on that, even if you don’t actually use weights).
 
-4.4 Gender
-- Men: Number of men. (reference)
-- Women: Number of women.
-- For regression you’ll likely use proportions (e.g., Women / TotalPop), and treat one gender as implied by the other to avoid collinearity.
+#poverty vs unemployment
+ue_pvt_sc <- pvt_d %>%
+                      ggplot(aes(x = Unemployment, y = Poverty)) +
+                      geom_point(aes(color = Unemployment)) +
+                      geom_smooth(method = "loess", se = FALSE, color = "black") +
+                      labs(title = "Poverty vs Unemployment", x = "Unemployment (%)", y = "Poverty (%)") +
+                      theme_bw()
 
-4.5 Race/Ethnicity
-(all expressed as percent of population)
-- Hispanic – % Hispanic/Latino. (reference)
-- White – % White. 
-- Black – % Black.
-- Native – % Native American or Native Alaskan.
-- Asian – % Asian.
-- Pacific – % Native Hawaiian or Pacific Islander.
-- For modeling, these form a composition (percentages sum to ~100%), so you will later choose a reference category (e.g., White) and include the others relative to that.
 
-4.6 Employment sectors
-- Professional – % employed in professional areas. (reference)
-- Service – % employed in service jobs.
-- Office – % employed in sales and office jobs.
-- Construction – % employed in construction.
-- Production – % employed in production.
+#poverty vs each education 
+educ_vars <- c("LessThanHighSchool","HighSchoolDiploma", "SomeCollegeOrAssociateDegree","BachelorDegreeOrHigher")
 
-Again, these may be compositional for employment sectors; in regression, you may include all but one as contrasts with a reference sector.
+ed_pvt_sc <- pvt_d %>%
+                      pivot_longer(all_of(educ_vars), names_to = "Education",values_to = "EduPercent") %>%
+  ggplot(aes(x = EduPercent, y = Poverty)) +
+  geom_point(alpha = 0.3, aes(color = EduPercent)) +
+  geom_smooth(method = "loess", se = FALSE, color = "black") +
+  scale_color_continuous_sequential() +
+  facet_wrap(~ Education, scales = "free_x") +
+  labs(title = "Poverty vs Education Composition", x = "Education category (%)", y = "Poverty (%)") +
+  theme_bw()
 
-4.7 Transportation to work
-(all expressed as percent of workers using each mode)
-- Drive – % commuting alone in a car. (Reference)
-- Carpool – % commuting by carpool.
-- Transit – % commuting via public transportation.
-- Walk – % walking to work.
-- OtherTransp – % using other means of transportation.
-- WorkAtHome – % working from home.
+#poverty vs average age and mean commute
+age_commute_vars <- c("AvgAge", "MeanCommute")
 
-These describe commute patterns; they may also behave compositionally (sum to 100%).
+agmc_pvt_sc <- pvt_d %>%
+  pivot_longer(all_of(age_commute_vars),
+               names_to = "Variable",
+               values_to = "Value") %>%
+  ggplot(aes(x = Value, y = Poverty)) +
+  geom_point(alpha = 0.3, aes(color = Value)) +
+  geom_smooth(method = "loess", se = FALSE, color = "black") +
+  scale_color_continuous_sequential() +
+  facet_wrap(~ Variable, scales = "free_x") +
+  labs(title = "Poverty vs AvgAge and MeanCommute", x = NULL, y = "Poverty (%)") +
+  theme_bw()
 
-4.8 Type of work / employer
-(all expressed as percent of employed population) 
-- PrivateWork – % employed in private industry. (reference)
-- PublicWork – % employed in public jobs.
-- SelfEmployed – % self-employed.
-- FamilyWork – % in unpaid family work.
-These capture the sector/ownership structure of employment in the county.
 
-4.9 Economic conditions
-- Unemployment: % unemployed (unemployment rate).
 
-4.10 Education
-(all expressed as percent of adults in each education category)
-- LessThanHighSchool – % of adults with less than a high school diploma. (Reference)
-- HighSchoolDiploma – % of adults with a high school diploma only.
-- SomeCollegeOrAssociateDegree – % of adults completing some college or an associate degree.
-- BachelorDegreeOrHigher – % of adults with a bachelor’s degree or higher.
-These clearly form a composition over educational attainment. In regression, you’ll likely choose one as the reference and include the others to avoid perfect collinearity.
+                                #gender race and ethnicity
 
-4.11 Age
-- AvgAge: Average age in the county.
-This is a single continuous measure summarizing the age structure.
+#create proportion women 
+pvt_d <- pvt_d %>% mutate(propWomen = 100 * Women / TotalPop)
 
-4.12 Mean Commute Time
-- MeanCommute: Mean commute time (minutes).
+# histogram proportion women 
+hg_pw <- pvt_d %>% 
+                  ggplot(aes(x = propWomen)) +
+                  geom_histogram(bins = 30, aes(fill = after_stat(count))) +
+                  labs(title = "Distribution of Proportion Women", x = "Women (%)", y = "Count") +
+                  theme_bw()
+
+# poverty vs proportion women
+wm_pvt_sc <- pvt_d %>% 
+                        ggplot (aes(x = propWomen, y = Poverty)) +
+                        geom_point(alpha = 0.3, aes(color = propWomen)) +
+                        geom_smooth(method = "loess", se = FALSE, color = "black") +
+                        scale_color_continuous_sequential() +
+                        labs(title = "Poverty vs Proportion Women", x = "Women (%)", y = "Poverty (%)") +
+                        theme_bw()
+
+# create race/ethnicity vector
+race_vars <- c("Hispanic", "White", "Black", "Native", "Asian", "Pacific")
+
+# race/ethnicity histogram
+
+re_hist <- pvt_d %>%
+                    pivot_longer(all_of(race_vars), names_to = "Race",values_to = "Percent") %>%
+  ggplot(aes(x = Percent)) +
+  geom_histogram(bins = 30, aes(fill = after_stat(count))) +
+  facet_wrap(~ Race, scales = "free") +
+  labs(title = "Distributions: Race/Ethnicity Percentages",  x = "Percent", y = "Count") +
+  theme_bw()
+
+# poverty vs race 
+pr_pvt_sc <- pvt_d %>%
+  pivot_longer(all_of(race_vars),
+               names_to = "Race",
+               values_to = "Percent") %>%
+  ggplot(aes(x = Percent, y = Poverty)) +
+  geom_point(alpha = 0.3, aes(color = Percent)) +
+  geom_smooth(method = "loess", se = FALSE, color = "black") +
+  scale_color_continuous_sequential() +
+  facet_wrap(~ Race, scales = "free_x") +
+  labs(title = "Poverty vs Race/Ethnicity Composition", x = "Percent in group (%)", y = "Poverty (%)") +
+  theme_bw()
+
+
+
+                  # filter to ca and tx, poverty vs propwomen colored by state
+catx_pvt_sc <- pvt_d %>%
+  filter(State %in% c("CA", "TX")) %>%
+  ggplot(aes(x = propWomen, y = Poverty, color = State)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_color_discrete_qualitative() +
+  labs(title = "Poverty vs Proportion Women in CA vs TX", x = "Women (%)", y = "Poverty (%)") +
+  theme_bw()
+
+                #employment sectors
+
+sector_vars <- c("Professional", "Service", "Office", "Construction", "Production")
+
+#histograms of employment sectors
+eps_hist <- pvt_d %>%
+                      pivot_longer(all_of(sector_vars), names_to = "Sector",values_to = "Percent") %>%
+  ggplot(aes(x = Percent)) +
+  geom_histogram(bins = 30, aes(fill = after_stat(count))) +
+  facet_wrap(~ Sector, scales = "free") +
+  labs(title = "Distributions: Employment Sectors", x = "Percent in sector (%)", y = "Count") + 
+  theme_bw()
+
+#poverty vs employment
+pe_pvt_sc pvt_d %>%
+  pivot_longer(all_of(sector_vars),
+               names_to = "Sector",
+               values_to = "Percent") %>%
+  ggplot(aes(x = Percent, y = Poverty)) +
+  geom_point(alpha = 0.3, aes(color = Percent)) +
+  geom_smooth(method = "loess", se = FALSE, color = "black") +
+  scale_color_continuous_sequential() +
+  facet_wrap(~ Sector, scales = "free_x") +
+  labs(title = "Poverty vs Employment Sectors", x = "Percent in sector (%)", y = "Poverty (%)") + 
+  theme_bw()
+
+
+                        #transportation and work types
+
+#create transportation and worktyoe vectors
+transport_vars <- c("Drive", "Carpool", "Transit", "Walk", "OtherTransp", "WorkAtHome")
+worktype_vars  <- c("PrivateWork", "PublicWork", "SelfEmployed", "FamilyWork")
+
+#transport histograms
+ts_hist <- pvt_d %>%
+  pivot_longer(all_of(transport_vars),
+               names_to = "Mode",
+               values_to = "Percent") %>%
+  ggplot(aes(x = Percent)) +
+  geom_histogram(bins = 30, aes(fill = after_stat(count))) +
+  facet_wrap(~ Mode, scales = "free") +
+  labs(title = "Distributions: Commuting Modes", x = "Percent using mode (%)", y = "Count") +
+  theme_bw()
+
+
+#poverty vs transportation
+ts_pvt_sc <- pvt_d %>%
+  pivot_longer(all_of(transport_vars),
+               names_to = "Mode",
+               values_to = "Percent") %>%
+  ggplot(aes(x = Percent, y = Poverty)) +
+  geom_point(alpha = 0.3, aes(color = Percent)) +
+  geom_smooth(method = "loess", se = FALSE, color = "black") +
+  facet_wrap(~ Mode, scales = "free_x") +
+  labs(title = "Poverty vs Commuting Modes", x = "Percent using mode (%)", y = "Poverty (%)") +
+  theme_bw()
+
+
+#work type histograms
+wt_hist <- pvt_d %>%
+  pivot_longer(all_of(worktype_vars),
+               names_to = "WorkType",
+               values_to = "Percent") %>%
+  ggplot(aes(x = Percent)) +
+  geom_histogram(bins = 30, aes(fill = after_stat(count))) +
+  facet_wrap(~ WorkType, scales = "free") +
+  labs(title = "Distributions: Work Types", x = "Percent in work type (%)", y = "Count") +
+  theme_bw()
+
+# poverty vs work type
+wt_pvt_sc <- pvt_d %>%
+  pivot_longer(all_of(worktype_vars),
+               names_to = "WorkType",
+               values_to = "Percent") %>%
+  ggplot(aes(x = Percent, y = Poverty)) +
+  geom_point(alpha = 0.3, aes(color = Percent)) +
+  geom_smooth(method = "loess", se = FALSE, color = "black") +
+  facet_wrap(~ WorkType, scales = "free_x") +
+  labs(title = "Poverty vs Work Types", x = "Percent in work type (%)", y = "Poverty (%)") +
+  theme_bw()
+
+                                  #geography
+# geography poverty boxplot
+geo_pvt_hist <- pvt_d %>%
+                      ggplot(aes(x = State, y = Poverty)) +
+                      geom_boxplot(aes(fill = State)) +
+                      scale_fill_discrete_qualitative() +
+                      labs(title = "Poverty by State", x = "State", y = "Poverty (%)") +
+                      theme_bw()
+
+#spatial scatter lat vs long colored by poverty
+ss_pvt_ss <- pvt_d %>%
+                      ggplot(aes(x = Long, y = Lat, color = Poverty)) +
+                      geom_point(alpha = 0.8) +
+                      labs(title = "Geographic Distribution of Poverty", x = "Longitude", y = "Latitude") +
+                      theme_bw()
+
+#totalpop histogram
+pop_hist <- pvt_d %>%
+                      ggplot(aes(x = TotalPop)) +
+                      geom_histogram(bins = 30, aes(fill = after_stat(count))) + 
+                      labs(title = "Distribution of County Population Size", x = "Total population", y = "Count") +
+                      theme_bw() 
+
+# poverty vs totalpop 
+pop_pvt_ss <- pvt_d %>% 
+                        ggplot(aes(x = TotalPop, y = Poverty)) +
+                        geom_point(alpha = 0.8, aes(color = TotalPop)) +
+                        labs(title = "Poverty vs Population Size", x = "Total population (log scale)", y = "Poverty (%)") +
+                        theme_bw()
+
+#1
+pov_bp
+pov_dp
+
+#2
+econ_edu_hist
+ue_pvt_sc
+
+#3 
+ed_pvt_sc
+agmc_pvt_sc
+
+#4
+hg_pw
+wm_pvt_sc
+
+#5
+re_hist
+pr_pvt_sc
+
+#6
+catx_pvt_sc
+
+#7
+eps_hist
+
+#8
+ts_hist
+ts_pvt_sc
+
+#9
+wt_hist
+wt_pvt_sc
+
+#10
+geo_pvt_hist
+ss_pvt_ss
+
+#11
+pop_hist
+pop_pvt_ss
+```
