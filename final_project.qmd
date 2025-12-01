@@ -15,6 +15,13 @@ RQ2: To what extent is county-level poverty associated with the gender compositi
 library(tidyverse)
 library(colorspace)
 library(ggplot2)
+library(dplyr)
+library(apaTables)
+library(broom)
+library(lindia)
+library(sandwich)
+library(lmtest)
+library(knitr)
 ```
 ``` {r}
                                             # load the dataset
@@ -348,6 +355,7 @@ wt_pvt_sc <- pvt_d %>%
                       labs(title = "Poverty vs Work Types", x = "Percent in work type (%)", y = "Poverty (%)") +
                       theme_bw()
 
+ggsave("poverty_vs_worktype.png", plot = pop_pvt_ss, width = 10, height = 10, dpi = 300)
 
                                   #geography
 
@@ -375,47 +383,246 @@ pop_pvt_ss <- pvt_d %>%
                         labs(title = "Poverty vs Population Size", x = "Total population", y = "Poverty (%)") +
                         theme_bw()
 
-ggsave("poverty_vs_population.png", plot = pop_pvt_ss, width = 10, height = 10, dpi = 300)
-
-#1
-pov_bp
-pov_dp
-
-#2
-econ_edu_hist
-ue_pvt_sc
-
-#3 
-ed_pvt_sc
-agmc_pvt_sc
-
-#4
-hg_pw
-wm_pvt_sc
-
-#5
-re_hist
-pr_pvt_sc
-
-#6
-catx_pvt_sc
-
-#7
-eps_hist
-
-#8
-ts_hist
-ts_pvt_sc
-
-#9
-wt_hist
-wt_pvt_sc
-
-#10
-geo_pvt_hist
-ss_pvt_ss
-
-#11
-pop_hist
-pop_pvt_ss
 ```
+
+```{r}
+
+#fit the model including everything first
+
+pvt_lm <- lm(Poverty ~ TotalPop + propWomen + Hispanic + Black + Native +  Asian + Pacific + Service + Office + Construction + Production + Carpool + Transit + Walk + OtherTransp + WorkAtHome + MeanCommute + PublicWork + SelfEmployed + FamilyWork + Unemployment + HighSchoolDiploma + SomeCollegeOrAssociateDegree + BachelorDegreeOrHigher + AvgAge + Long + Lat, data = pvt_d, na.action = na.omit)
+
+table1 <- apa.reg.table(pvt_lm, table.number = 1,filename = "OLS.doc")
+
+apa.save(filename = "OLS.doc", table1)
+```
+
+```{r}
+#homoskedasticity
+#residual vs fitted plot for the entire fitted model
+diag_df <- broom::augment(pvt_lm)  
+
+diag_df <- broom::augment(pvt_lm) %>%
+                              mutate(row = as.integer(.rownames)) %>% 
+                              left_join(pvt_d %>% mutate(row = dplyr::row_number()), by = "row")
+
+lm_rf <- diag_df %>%
+                    ggplot(aes(x = .fitted, y = .resid)) +
+                    geom_hline(yintercept = 0, linetype = "dashed") +
+                    geom_point(alpha = 0.4, size = 1) +
+                    geom_smooth(method = "lm", se = FALSE) +
+                    labs(x = "Fitted values (Predicted Poverty %)", y = "Residuals", title = "Residuals vs Fitted Values for Main Model") +
+                    theme_bw() 
+
+ggsave("resfit_lm.png", plot = lm_rf, width = 10, height = 10, dpi = 300)
+
+
+
+#normality of residuals
+
+#histogram
+norm_res_hist <- diag_df %>% 
+                            ggplot(aes(x = .resid)) +
+                            geom_histogram(fill = "#08306B") +
+                            labs(x = "Residuals", y = "Count", title = "Histogram of residuals for model") +
+                            theme_bw()
+
+ggsave("norm_res_hist.png", plot = norm_res_hist, width = 10, height = 10, dpi = 300)
+
+#QQ plot
+norm_res_qq <- diag_df %>%
+                        ggplot(aes(sample = .resid)) +
+                        stat_qq() +
+                        stat_qq_line() +
+                        labs(x = "Theoretical quantiles", y = "Sample quantiles (standardized residuals)", title = "Normal Q–Q plot of residuals") +
+                        theme_bw()
+
+ggsave("norm_res_qq.png", plot = norm_res_qq, width = 10, height = 10, dpi = 300)
+
+#residual correlation
+#residual scatterplot by latlong
+resid_cor_latlong <- diag_df %>%
+                        ggplot(aes(x = Long, y = Lat, color = .resid)) +
+                        geom_point() +
+                        scale_colour_continuous_divergingx(palette = "RdBu", mid = 0) +
+                        coord_fixed(1.3) +
+                        labs(x = "Longitude", y = "Latitude", color = "Residual", title = "Spatial pattern of residuals from model") +
+                        theme_bw()
+
+ggsave("resid_cor_latlong.png", plot = resid_cor_latlong, width = 10, height = 10, dpi = 300)
+
+#residual boxplot per state
+resid_cor_state <- diag_df %>%
+                              ggplot(aes(x = State, y = .resid)) +
+                              geom_boxplot(outlier.alpha = 0.2) +
+                              geom_hline(yintercept = 0, linetype = "dashed") +
+                              labs(x = "State", y = "Residuals", title = "Residuals by state") +
+                              theme_bw() +
+                              theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+ggsave("resid_cor_state.png", plot = resid_cor_state, width = 10, height = 10, dpi = 300)
+
+#outliers
+
+#plots
+diag_plots <- gg_diagnose(diag_df, plot.all = FALSE)
+names(diag_plots)
+
+diag_plots$resleverage
+diag_plots$cooksd
+
+ggsave("reslevarage_outliers.png", plot = diag_plots$resleverage, width = 10, height = 10, dpi = 300)
+
+ggsave("cooksd_outliers.png", plot = diag_plots$cooksd, width = 10, height = 10, dpi = 300)
+
+# how many big standardized residuals?
+sum(abs(diag_df$.std.resid) > 2)
+sum(abs(diag_df$.std.resid) > 3)
+
+# Cook's distance cutoff & how many above
+n <- nrow(diag_df)
+p <- length(coef(pvt_lm))
+cook_cut <- 4 / (n - p - 1)
+
+sum(diag_df$.cooksd > cook_cut)
+
+#colinearity
+vif(pvt_lm)
+
+```
+
+```{r}
+#use robust standard errors
+
+#compute a robust covariate matrix
+vcov_robust <- vcovHC(pvt_lm, type = "HC3")
+
+#get robust coefficients test
+robust_ct <- coeftest(pvt_lm, vcov. = vcov_robust)
+
+#turn it into tidy dataframe
+robust_tidy <- broom::tidy(pvt_lm)      
+robust_se   <- sqrt(diag(vcov_robust)) 
+
+# Replace the SE, t, p in the tidy table
+robust_tidy$std.error <- robust_se
+robust_tidy$statistic <- robust_tidy$estimate / robust_tidy$std.error
+robust_tidy$p.value   <- 2 * pt(abs(robust_tidy$statistic), df = df.residual(pvt_lm), lower.tail = FALSE)
+
+#add 95% CI
+alpha <- 0.05
+t_crit <- qt(1 - alpha/2, df = df.residual(pvt_lm))
+
+robust_tidy$conf.low  <- robust_tidy$estimate - t_crit * robust_tidy$std.error
+robust_tidy$conf.high <- robust_tidy$estimate + t_crit * robust_tidy$std.error
+
+#use this for reporting
+knitr::kable(robust_tidy, digits = 3)
+
+table2 <- apa.reg.table(robust_tidy, table.number = 1, filename = "regression_robust_se.doc")
+apa.save(filename = "regression_robust_se.doc", robust_tidy)
+
+```
+```{r}
+#multiple testing
+
+#define the family of hypotheses for RQ1: socio-demographic + economic predictors, TotalPop, Long, Lat as controls
+
+rq1_family <- c("propWomen", "Hispanic", "Black", "Native", "Asian", "Pacific", "Service", "Office", "Construction", "Production", "Carpool", "Transit", "Walk", "OtherTransp", "WorkAtHome", "PublicWork", "SelfEmployed", "FamilyWork", "Unemployment", "HighSchoolDiploma", "SomeCollegeOrAssociateDegree", "BachelorDegreeOrHigher", "AvgAge", "MeanCommute")
+
+
+rq1_results <- robust_tidy %>%
+                              dplyr::filter(term %in% rq1_family)
+
+#apply BH method to calculate FDR
+
+rq1_results <- rq1_results %>%
+                            dplyr::mutate(p_raw = p.value, p_BH  = p.adjust(p.value, method = "BH"), sig_BH_05 = p_BH < 0.05)
+
+rq1_results[order(rq1_results$p_BH), ]
+
+subset(rq1_results, sig_BH_05)
+subset(rq1_results, !sig_BH_05)
+
+
+
+```
+
+```{r}
+#RQ2 CA vs TX
+
+#subset to CA and TX
+pvt_catx <- pvt_d %>%
+                      filter(State %in% c("CA", "TX")) %>%
+                                                          droplevels()
+
+#set CA as reference
+pvt_catx$State <- relevel(factor(pvt_catx$State), ref = "CA")
+
+#mean center propWomen for nicer interpretation
+pvt_catx <- pvt_catx %>%
+                        mutate(propWomen_c = propWomen - mean(propWomen, na.rm = TRUE))
+
+#fit the model for RQ2 (with interaction: propwomen_c * state)
+rq2_lm <- lm(Poverty ~ propWomen_c * State + Unemployment + HighSchoolDiploma + SomeCollegeOrAssociateDegree + BachelorDegreeOrHigher + Hispanic + Black + Native + Asian + Pacific, data = pvt_catx, na.action = na.omit)
+
+
+# Robust SEs for RQ2 model
+
+vcov_robust_rq2 <- vcovHC(rq2_lm, type = "HC3")
+rq2_ct <- coeftest(rq2_lm, vcov. = vcov_robust_rq2)
+
+rq2_tidy <- broom::tidy(rq2_lm)
+rq2_se <- sqrt(diag(vcov_robust_rq2))
+
+rq2_tidy$std.error <- rq2_se
+rq2_tidy$statistic <- rq2_tidy$estimate / rq2_tidy$std.error
+rq2_tidy$p.value <- 2 * pt(abs(rq2_tidy$statistic), df = df.residual(rq2_lm), lower.tail = FALSE)
+
+# 95% robust CI
+alpha <- 0.05
+tcrit_rq2 <- qt(1 - alpha/2, df = df.residual(rq2_lm))
+
+rq2_tidy$conf.low  <- rq2_tidy$estimate - tcrit_rq2 * rq2_tidy$std.error
+rq2_tidy$conf.high <- rq2_tidy$estimate + tcrit_rq2 * rq2_tidy$std.error
+
+#see the key rows: propwomen and interaction
+rq2_tidy %>%
+            filter(term %in% c("propWomen_c", "StateTX", "propWomen_c:StateTX")) %>%
+                                        knitr::kable(digits = 3)
+
+
+#compute simole slopes for CA and TX
+#extract coefficients & robust vcov
+b2 <- coef(rq2_lm)
+V2 <- vcov_robust_rq2
+
+# Indices for relevant terms
+i_pw <- which(names(b2) == "propWomen_c")
+i_int <- which(names(b2) == "propWomen_c:StateTX")
+
+# Slope in CA (reference state)
+slope_CA <- b2[i_pw]
+se_CA <- sqrt(V2[i_pw, i_pw])
+t_CA <- slope_CA / se_CA
+p_CA <- 2 * pt(abs(t_CA), df = df.residual(rq2_lm), lower.tail = FALSE)
+CI_CA <- slope_CA + c(-1, 1) * tcrit_rq2 * se_CA
+
+#slope in TX = propWomen_c + interaction
+slope_TX <- b2[i_pw] + b2[i_int]
+var_TX <- V2[i_pw, i_pw] + V2[i_int, i_int] + 2 * V2[i_pw, i_int]
+se_TX <- sqrt(var_TX)
+t_TX <- slope_TX / se_TX
+p_TX <- 2 * pt(abs(t_TX), df = df.residual(rq2_lm), lower.tail = FALSE)
+CI_TX <- slope_TX + c(-1, 1) * tcrit_rq2 * se_TX
+
+data.frame(State = c("CA", "TX"), Slope = c(slope_CA, slope_TX),SE_robust = c(se_CA, se_TX), t_value    = c(t_CA, t_TX), p_value = c(p_CA, p_TX), CI_low = c(CI_CA[1], CI_TX[1]), CI_high = c(CI_CA[2], CI_TX[2])) %>% knitr::kable(digits = 3)
+
+
+#interaction term
+rq2_tidy %>% filter(term == "propWomen_c:StateTX") %>% knitr::kable(digits = 3)
+
+
+
+```
+
+Use gt package for all the tabulations
