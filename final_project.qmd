@@ -1,16 +1,335 @@
 ---
-title: "PSTAT 220A Final Project"
-subtitle: "Analysing Poverty"
+title: "Final Project: Poverty and County-Level Demographic, Socioeconomic, and Geographic Estimates"
 author: "Soumyajit De"
-date: "November 22, 2025"
-format: pdf
+format:
+  pdf:
+    documentclass: apa7
+    classoption: [stu, floatsintext]
+    keep-tex: true
+engine: knitr
+header-includes: |
+  \usepackage[american]{babel}
+  \usepackage{csquotes}
+  \usepackage{amsmath}
+  \usepackage{bm}
+  \usepackage{float} 
+  \shorttitle{Final Project Poverty}
+  \affiliation{\mbox{Department of Communication, University of California, Santa Barbara}}
+  \course{PSTAT 220A Advanced Statistical Methods}
+  \professor{Instructor: Dr. Alexander Franks}
+  \duedate{December 8, 2025}
+  \setlength{\parindent}{0.5in}
+  \setlength{\parskip}{0in}
 ---
 
-RQ1. How is county-level poverty (percentage of individuals under the poverty level) associated with county demographic, geographic, and socioeconomic characteristics, including gender, race/ethnicity, employment sectors, commuting patterns, employment type, unemployment, education, and average age? Specifically, which of these variables appear to be most strongly associated with poverty, and which (if any) show little or no predictive value?
+In this project, I analyze county-level patterns of poverty in the United States using a cross-sectional dataset of 3,141 counties drawn from all 50 states. Each observation corresponds to a single county and includes the percentage of residents living below the poverty line, overall population size, and a range of demographic, socioeconomic, and geographic characteristics. Poverty is defined as the percentage of residents whose income falls below the official poverty threshold for a given year. It serves as the primary outcome variable for all analyses. The first research question examines how poverty is related to this broad set of county-level characteristics. Specifically, I ask: 
 
-RQ2: To what extent is county-level poverty associated with the gender composition of the population, and does this association differ between counties in California and Texas?
+RQ1. How is county-level poverty (percentage of individuals under the poverty level) associated with county demographic, geographic, and socioeconomic characteristics? Which of these variables appear to be most strongly associated with poverty, and which (if any) show little or no predictive value? 
 
-``` {r}
+In addressing this, I group predictor variables into conceptual blocks (e.g., gender, race/ethnicity, employment sectors, transportation to work, type of work, economic conditions, education, age, and geography) and examine their joint associations with county poverty rates. The second research question narrows the focus to gender composition and state context: 
+
+RQ2. To what extent is county-level poverty associated with the gender composition of the population in California and Texas, and does this association differ?
+
+In the following sections, I describe the dataset, key variables, and preprocessing decisions; present exploratory data analyses to summarize the distribution of poverty and its associations with the main predictors; fit multiple linear regression models to address RQ1 and RQ2 using robust standard errors and model diagnostics; apply a multiple-testing correction to account for the number of predictors before summarizing the main patterns of association, and and discuss their implications and limitations.
+
+# Methods
+
+## Data and Variables
+
+For the analyses, I used the $\texttt{poverty\_data.csv}$ dataset provided on Canvas. It contains 3,141 cross sectional observations, each corresponding to a single U.S. county. The primary outcome variable is Poverty, which I define as the percentage of county residents whose income falls below the official poverty threshold for a given year. This variable is expressed on a 0--100 scale and serves as the dependent variable for both research questions. All remaining variables are treated as predictors. 
+
+
+Location and geography consists of State, County, and county_fips, which identify each county and allow subsetting for RQ2. Long and Lat provide county-level longitude and latitude that are used to visualize geographic patterns. The variable TotalPop represents the total number of residents in each county. Gender is described by the variables Men and Women, which are later combined into a percentage of women (propWomen). Race and ethnicity are represented by variables Hispanic, White, Black, Native, Asian, and Pacific in per cent. Finally, the AvgAge represents the mean age of residents.
+
+Economic and labor-market conditions are represented by several blocks of variables. Unemployment variable represents the percentage of the labor force that is unemployed. Educational block constitutes variables that are summarized by the percentages of adults with less than a high school diploma (LessThanHighSchool), a high school diploma (HighSchoolDiploma), some college or an associate degree (SomeCollegeOrAssociateDegree), and a bachelor’s degree or higher (BachelorDegreeOrHigher). Employment sectors variables include the percentages of employed residents working in Professional, Service, Office, Construction, and Production jobs. The type of employer block includes variables that are the percentages of involvement in private industry (PrivateWork), public jobs (PublicWork), self-employment (SelfEmployed), and unpaid family work (FamilyWork). Transportation to work is described by variables representing the percentages of workers who Drive, Carpool, use Transit, Walk, use other means (OtherTransp), or work from home (WorkAtHome). MeanCommute variable represents the mean commute time in minutes. Together, these blocks provide a structured description of county-level context for the exploratory analyses and regression models that follow.
+
+## Preprocessing and Missing Data
+
+Before conducting exploratory analyses and fitting regression models, I carried out basic preprocessing. All variables defined as percentages were retained on their original 0--100 scale so that a 1-unit change corresponds to a 1--percentage-point change. To summarize gender composition, I constructed a single predictor,
+
+$$\text{propWomen}_i = 100 \times \frac{\text{Women}_i}{\text{TotalPop}_i},$$
+
+where $\text{Women}_i$ and $\text{TotalPop}_i$ denote the number of women and total population in county $i$. The percentage of men is then implied as $100 - \text{propWomen}_i$ and is not included separately in the models, avoiding colinearity.
+
+Several other predictor blocks also form compositions whose components sum to approximately 100\%: race/ethnicity (Hispanic, White, Black, Native, Asian, Pacific), employment sectors (Professional, Service, Office, Construction, Production), commuting modes (Drive, Carpool, Transit, Walk, OtherTransp, WorkAtHome), type of work or employer (PrivateWork, PublicWork, SelfEmployed, FamilyWork), and educational attainment (LessThanHighSchool, HighSchoolDiploma, SomeCollegeOrAssociateDegree, BachelorDegreeOrHigher). For counties with complete information, I checked the overall composition and they they satisfy the following constraint:
+
+$$\text{Hispanic}_i + \text{White}_i + \text{Black}_i + \text{Native}_i + \text{Asian}_i + \text{Pacific}_i \approx 100.$$
+
+To avoid perfect collinearity in models, I designated one category in each block as a reference and omitted it from the design matrix: White for race/ethnicity, Professional for employment sectors, Drive for transportation modes, PrivateWork for type of employer, and LessThanHighSchool for educational attainment. Coefficients for the included categories are therefore interpreted as changes in poverty (in percentage points) associated with a 1--percentage-point increase in that category, holding other predictors and the implied reference category constant.
+
+I examined missingness in the data and found that each of the four education variables had eight missing values, corresponding to eight counties with no recorded information on educational attainment. Furthermore, AvgAge had five missing values, and the geographic identifiers Long, Lat, and county--fips each had two missing values. For exploratory plots, I included all available counties, including those with missing data, so that the EDA reflects the full dataset. For regression models, I excluded those 12 counties with missing data and used complete-case analysis with respect to the outcome and the predictors included in each model. Finally, I verified that all percentage variables in the retained modeling dataset fall within the valid range of 0 to 100\%; no negative or greater-than-100 values were observed. A brief table listing the eight counties with missing education data and their patterns of missingness is provided in Appendix A.
+
+## Exploratory Data Analysis
+
+```{r fig-poverty-density, echo=FALSE, out.width="49%", fig.pos="H", fig.cap="Density plot of county poverty rates (Poverty, in percent)."}
+knitr::include_graphics("poverty_density.png")
+```
+
+I first examined the distribution of county poverty rates. The distribution of Poverty is moderately right-skewed: most counties fall between roughly 10\% and 25\% poverty, with a long right tail including a small number of counties above 40\%. This is shown in the density plot in Figure 1. Boxplots of poverty by state (Appendix B, Figure B1) indicate substantial between-state differences in both central tendency and spread, with some states concentrated at relatively low poverty and others centered at much higher levels.
+
+Next, I explored economic and education variables. Counties with higher unemployment rates tend to have substantially higher poverty, and the smoothed curve in Figure 2 is clearly upward-sloping. Educational block showed a similarly strong gradient. Counties with higher percentages of adults holding a bachelor’s degree or higher almost always have lower poverty, whereas counties with higher percentages of adults with less than a high school diploma have markedly higher poverty. The intermediate categories (high school diploma and some college or an associate degree) show weaker and more curved relationships as illustrated in Figure 3. Average age and mean commute time have only modest and slightly nonlinear associations with poverty (Appendix B, Figure B2--B3). Overall, these results suggest that unemployment and education composition are core predictors for RQ1, with age and commute time playing more secondary roles.
+
+```{r fig-poverty-unemployment, echo=FALSE, out.width="40%", fig.pos="H", fig.cap="County poverty rate versus unemployment percentage."}
+knitr::include_graphics("poverty_vs_unemployment.png")
+```
+
+I then examined demographic and work-related variables. The derived percentage of women, propWomen, is concentrated near 50% in most counties and has a very weak bivariate association with poverty: the fitted curve is nearly flat, and the point cloud is dense and vertically oriented (Appendix B, Figure B4). When looking into California and Texas, separate fitted lines for each state as indicated in Figure 4, remain shallow and close to horizontal, suggesting that any state-specific differences in the propWomen--poverty association are likely small. In contrast, racial and ethnic composition shows much clearer patterns (Appendix B, Figure B5). Employment sector, work-type, and commuting variables show similar gradients (Appendix B, Figures B6--B7). Together, these exploratory results motivate including unemployment, education, location, race/ethnicity, and selected employment and work-type variables as primary predictors for RQ1, while retaining propWomen to address RQ2 explicitly.
+
+```{r fig-poverty-education, echo=FALSE, out.width="60%", fig.pos="H", fig.cap="County poverty rate versus percentages in each education category: less than high school, high school diploma, some college or associate degree, and bachelor’s degree or higher."}
+knitr::include_graphics("poverty_vs_education.png")
+```
+
+```{r fig-poverty-catx, echo=FALSE, out.width="50%", fig.pos="H", fig.cap="County poverty rate versus percentage women propWomen in California and Texas, with separate fitted lines by state."}
+knitr::include_graphics("ca_vs_tx.png")
+```
+## Modeling Strategy
+
+To address RQ1, I modeled county poverty as a function of the main demographic, geographic, and socioeconomic blocks described above. Let $\text{Poverty}_i$ denote the poverty rate (in percent) for county $i$. The primary model is a multiple linear regression:
+$$
+\text{Poverty}_i= \beta_0 + \beta_1 \text{propWomen}_i + \beta_2 \text{Unemployment}_i + \mathbf{x}_i^\top \mathbf{\beta} + \varepsilon_i,
+$$
+
+where $\text{propWomen}_i$ is the percentage of women, $\text{Unemployment}_i$ is the county unemployment rate, and $\mathbf{x}_i$ represents the remaining predictors from the race/ethnicity, education, employment sector, commuting mode, work-type, age, commute-time, and geographic blocks. Within some compositional blocks, one category is omitted as a reference (White, Professional, Drive, PrivateWork, LessThanHighSchool), so coefficients for the included categories can be interpreted as changes in poverty associated with a 1--percentage-point increase in that category, holding other predictors constant. The exclusion also helps to avoid multicolinearity.
+
+For RQ2, I restricted the data to counties in California and Texas and examined whether the association between gender composition and poverty differs by state. State was dummy coded with California as the reference category ($\text{StateTX}_i = 1$ for Texas, $0$ for California), so that the StateTX coefficient represents how average poverty in Texas differs from California. I also created a mean-centered version of gender composition, $\text{propWomen}_{c,i} = \text{propWomen}_i - \overline{\text{propWomen}}$, so that $\text{propWomen}_{c,i} = 0$ corresponds to the average percentage of women across CA and TX. This makes the intercept and the StateTX coefficient easier to interpret because they refer to a typical county rather than to the unrealistic case of 0\% women.
+$$
+\text{Poverty}_i = \beta_0 + \beta_1 \text{propWomen}_{c,i} + \beta_2 \text{StateTX}_i + \beta_3 \bigl(\text{propWomen}_{c,i} \times \text{StateTX}_i\bigr) + \mathbf{z}_i^\top \mathbf{\gamma} + \varepsilon_i,
+$$
+
+Here, $\mathbf{z}_i$ represents a reduced set of control variables that include unemployment, the education block (HighSchoolDiploma, SomeCollegeOrAssociateDegree, BachelorDegreeOrHigher), and race/ethnicity (Hispanic, Black, Native, Asian, and Pacific). I included them because they seemed to have a strong association with poverty in EDA and can be plausible confounders. Hence, adjusting for them may help to isolate the association of propWomen_c and its interaction with StateTX. 
+
+In the model, $\beta_0$ is the mean poverty rate for a California county at the average percentage of women, $\beta_1$ is the slope relating gender composition to poverty in California, $\beta_2$ is the difference in baseline poverty between Texas and California at the average proportion of women, and $\beta_3$ is the difference in slopes between Texas and California. The simple slope for Texas is therefore $\beta_1 + \beta_3$, so in the results I report both the regression coefficients (propWomen$_c$, StateTX, and their interaction) and derived simple slopes for California (slope $= \beta_1$) and Texas (slope $= \beta_1 + \beta_3$), each with heteroskedasticity-robust confidence intervals.
+
+For both models, I used coefficients from ordinary least squares (OLS) and reported as unstandardized percentage-point units. I found heteroskedasticity and heavy-tailed residuals while testing assumptions and diagnosis, which I will discuss in the next section. Therefore, I based all hypothesis tests and confidence intervals on heteroskedasticity-robust (HC3; MacKinnon \& White, 1985) standard errors. For RQ1, I treated the predictors as a single family and applied the Benjamini--Hochberg false discovery rate procedure (Benjamini \& Hochberg, 1995) at $q = .05$ to the robust $p$-values. For RQ2, I focused on a small number of pre-specified coefficients (the main effect of gender composition and its interaction with state) and therefore report robust $p$-values without additional multiple-testing correction.
+
+## Assumptions and Diagnosis
+
+```{r fig-residual-fitted, echo=FALSE, out.width="50%", fig.pos="H", fig.cap="Residuals versus fitted values for the RQ1 model."}
+knitr::include_graphics("resfit_lm.png")
+```
+For the main RQ1 model, I examined linearity, homoskedasticity, normality, independence, outliers, and multicollinearity using standard regression diagnostics. The residuals versus fitted values plot (Figure 5) shows residuals centered around zero across the fitted range, with no strong curvature, suggesting that the model is fairly linear. However, the vertical spread of residuals increases somewhat for higher fitted poverty values, producing a mild fan shape. This indicated heteroskedasticity, and due to this, I based all hypothesis tests and confidence intervals on heteroskedasticity robust (HC3; MacKinnon & White, 1985) standard errors for both RQ1 and RQ2.
+
+I assessed normality of residuals using a histogram (Figure 6) and a normal Q--Q plot (Appendix C, Figure C1). The histogram is roughly symmetric and centered at zero, but the tails seem heavier than a normal distribution. Given the large sample size and the use of robust standard errors, I did not perform any transformations.
+
+Additional diagnostics are reported in Appendix C. Residual maps and residuals by state (Appendix C, Figures C2--C3) show only mild spatial clustering and no large regions of systematic over or underprediction. Plots of standardized residuals versus leverage and Cook’s distance (Appendix C, Figures C4--C5) indicate that only a small number of observations have large residuals or moderate leverage, and no single county has an undue influence on the fit. Variance inflation factors (VIF) (Appendix C, Table C1) are mostly in the low to moderate range, with higher values confined to the education block. This makes sense because if one education category goes up then others should come down. Overall, these diagnostics support using linear models on the original poverty scale combined with robust standard errors and cautious interpretation of tail behavior and spatial dependence.
+
+```{r fig-residual-hist, echo=FALSE, out.width="55%", fig.pos="H", fig.cap="Histogram of residuals for the main RQ1 regression model."}
+knitr::include_graphics("norm_res_hist.png")
+```
+
+## Multiple Testing
+
+Because the main RQ1 model includes a large set of predictors, relying only on raw $p$-values would increase the chance of false positives. To control false discoveries while retaining reasonable power, I treated the main RQ1 predictors as a single family of hypotheses and applied the Benjamini--Hochberg false discovery rate (FDR) procedure at $q = .05$ (Benjamini \& Hochberg, 1995). Let $p_{(1)} \le \cdots \le p_{(m)}$ denote the ordered $p$-values for the $m$ substantive coefficients. The Benjamini--Hochberg procedure finds the largest index $k$ such that
+$$
+p_{(k)} \le \frac{k}{m} q,
+$$
+and declares all hypotheses with $p_{(j)} \le p_{(k)}$ as FDR-significant.
+In the RQ1 results table (Table 1), I report robust $p$-values for all coefficients and indicate which predictors remain significant after FDR control at $q = .05$. My inference about strong and weak predictors is based on this FDR-adjusted $p$-values. For RQ2, I examined only a small number of variables, so I did not apply a multiple testing correction and interpreted the robust $p$-values directly.
+
+# Results
+## RQ1: Associations Between Poverty and County Characteristics
+Table 1 reports the multiple regression model for RQ1, with Poverty as the outcome and the full set of demographic, socioeconomic, and geographic predictors. Coefficients are estimated by OLS with HC3 robust standard errors; for inference on the main predictors, I have used Benjamini--Hochberg adjusted $p$-values.
+
+Unemployment and the educational blocks are the strongest predictors of Poverty. Higher Unemployment is very strongly associated with higher Poverty, whereas longer MeanCommute is associated with lower Poverty. Relative to LessThanHighSchool, higher percentages with HighSchoolDiploma, SomeCollegeOrAssociateDegree, and BachelorDegreeOrHigher are each strongly associated with lower Poverty, with SomeCollegeOrAssociateDegree showing the largest and most negative coefficient in this block.
+
+\begin{table}[htbp]
+\centering
+\caption{RQ1: County Poverty Regressed on Demographic, Geographic, and Socioeconomic Predictors}
+\label{tab:rq1}
+\includegraphics[width=\linewidth]{rq1_reg_table.png}
+\end{table}
+
+Race and ethnicity also show important patterns. Relative to White, higher percentages of Black and Native residents are associated with higher Poverty, while higher Hispanic and Asian percentages are associated with lower Poverty. Pacific has a relatively large negative point estimate but does not remain significant after FDR adjustment. In the employment-sector block with Professional as the reference, Service is a strong positive predictor of Poverty, whereas Office, Construction, and Production have smaller coefficients are not statistically significant. For type of employer with PrivateWork as reference, PublicWork and SelfEmployed are moderately and significantly positively associated with Poverty, while FamilyWork has the largest positive estimate but is not FDR significant.
+
+The contribution of transportation and remaining demographic/geographic variables remain strong to modest. Relative to Drive, greater use of Transit is positively associated with Poverty, whereas OtherTransp is negatively associated with Poverty; Carpool, Walk, and WorkAtHome have small and insignificant effects. The gender composition variable propWomen is a strong positive predictor, indicating that counties with a higher percentage of women tend to have higher Poverty, even after adjustment. AvgAge is also a strong negative predictor, with older counties having lower Poverty. Finally, the geographic coordinates Long and Lat both have small but significant negative associations with Poverty, while TotalPop has an essentially zero and nonsignificant coefficient, making it the weakest predictor overall.
+
+## RQ2: Gender Composition in California vs. Texas
+
+RQ2 tests whether the association between gender composition (propWomen) and Poverty  differs between California and Texas. As described before, this model uses only counties in CA and TX, codes StateTX as 0 for California and 1 for Texas, and relies on a mean-centered percentage of women (propWomen_c). The regression includes propWomen_c, StateTX, their interaction propWomen_c:StateTX, and controls for Unemployment, HighSchoolDiploma, SomeCollegeOrAssociateDegree, BachelorDegreeOrHigher, Hispanic, Black, Native, Asian, and Pacific, with HC3 robust standard errors. Table 2 presents the raw interaction model.
+
+\begin{table}[htbp]
+  \centering
+  \caption{County Poverty Regressed on Gender Composition, State, and Controls}
+  \label{tab:rq2_raw}
+  \includegraphics[width=\linewidth]{rq2_rawreg_table.png}
+\end{table}
+
+Here, the coefficient on propWomen_c gives the slope relating gender composition to Poverty in California (the reference state) at the average percentage of women; the StateTX coefficient gives the difference in baseline Poverty between Texas and California at that average; and the propWomen_c:StateTX coefficient gives the difference between the Texas and California slopes ($\text{slope}_{\text{TX}} - \text{slope}_{\text{CA}}$). In Table 2, none of these three coefficients is statistically significant.
+
+To make the state-specific slopes explicit, I computed simple slopes for California and Texas. Let $\beta_1$ denote the coefficient on propWomen_c and $\beta_3$ the coefficient on propWomen_c:StateTX. Then:
+$$
+\text{slope}_{\text{CA}} = \beta_1,
+\qquad
+\text{slope}_{\text{TX}} = \beta_1 + \beta_3.
+$$
+The variance of the Texas slope is:
+$$
+\mathrm{Var}(\text{slope}_{\text{TX}}) = \mathrm{Var}(\beta_1) + \mathrm{Var}(\beta_3) + 2\,\mathrm{Cov}(\beta_1,\beta_3),
+$$
+so that
+$$
+\mathrm{SE}(\text{slope}_{\text{TX}}) = \sqrt{\mathrm{Var}(\text{slope}_{\text{TX}})}, \quad
+t = \frac{\text{slope}_{\text{TX}}}{\mathrm{SE}(\text{slope}_{\text{TX}})}, \quad
+\text{CI}_{95\%} = \text{slope}_{\text{TX}} \pm t_{.975}\,\mathrm{SE}(\text{slope}_{\text{TX}}).
+$$
+
+
+\begin{table}[htbp]
+  \centering
+  \caption{RQ2: Simple Slopes and Interaction of Gender Composition by State and Controls}
+  \label{tab:rq2_tidy}
+  \includegraphics[width=\linewidth]{rq2_tidyreg_table.png}
+\end{table}
+
+Table 3 reports these simple slopes together with the same controls as in Table 2. As noted before, the simple slope for propWomen_c in California (CA) is positive but not statistically significant, indicating little evidence of a gender–poverty association in California. The slope for Texas (TX) is larger and statistically significant, suggesting that in Texas, counties with more women tend to have higher Poverty when unemployment, education, and race/ethnicity are held constant. However, like before the difference between these slopes (the CA:TX interaction) is not significant, indicating no strong evidence that the propWomen–Poverty relationship truly differs between California and Texas.
+
+# Discussion and Conclusion
+
+For RQ1, the multiple regression shows that county level poverty is most strongly associated with unemployment, education, race/ethnicity, gender composition, and average age. Counties with higher unemployment and a larger share of adults without a high school diploma tend to have substantially higher poverty, whereas higher levels of educational attainment are linked to notably lower poverty. Racial and ethnic composition also matters: counties with larger Black and Native populations have higher poverty, whereas those with larger Hispanic and Asian populations tend to have lower poverty, net of the other variables. Poverty is additionally higher in counties with more women and lower in counties with older average age, with labor-market (service, public sector, and self-employment) and commuting patterns (greater public transit use) adding smaller but meaningful contributions. Population size and several other employment and transportation categories show little predictive value. Overall, these findings are consistent with the EDA, which already highlighted unemployment, education, and race/ethnicity as the clearest indicators of county poverty.
+
+For RQ2, the California–Texas interaction suggests that gender composition is only weakly related to county poverty. The slope for the percentage of women is small and not significant in California, and somewhat larger and significant in Texas. This indicates that Texas counties with more women tend to have higher poverty after controlling for unemployment, education, and racial/ethnic blocks. However, the difference between the California and Texas slopes is not itself significant, so there is little evidence that the gender–poverty relationship truly differs between the two states. This pattern is consistent with the EDA, where the fitted lines for California and Texas were closely overlapping (see Figure 4).
+
+Substantively, the results suggest that county poverty is driven primarily by local labor-market conditions, educational attainment, and racial/ethnic composition, with gender composition and many detailed employment and commuting measures playing a more limited role. The analysis is cross-sectional and observational, so the associations should not be interpreted as causal, and residual plots (Appendix B) indicate some remaining spatial structure, suggesting that a full spatial level modeling could provide a better account of geographic dependence. Within these limits, the findings highlight the importance of policies that reduce unemployment and expand educational opportunities as drivers for lowering county-level poverty, and they point to future work that incorporates richer spatial modeling, additional policy covariates, and longitudinal data to study changes in poverty over time.
+
+I used ChatGPT (GPT-5.1 Thinking; OpenAI, 2025) to help me with R, debug code, and polish the overall analysis. I designed the analysis plan by myself, and then asked specific questions to ChatGPT mainly for sanity checks. I asked whether particular modeling choices were appropriate and what problems I might run into, while I implemented the code and verified all results on my own.
+
+\newpage
+
+# References
+
+Benjamini, Y., & Hochberg, Y. (1995). Controlling the false discovery rate: A practical and powerful approach to multiple testing. \textit{Journal of the Royal Statistical Society: Series B (Methodological)}, \textit{57}(1), 289--300.
+
+MacKinnon, J. G., \& White, H. (1985). Some heteroskedasticity-consistent covariance matrix estimators with improved finite sample properties. \textit{Journal of Econometrics}, \textit{29}(3), 305--325.
+
+OpenAI. (2025, April 29). \textit{GPT-5.1: Advancing reasoning and assistance}. Retrieved December 8, 2025, from \url{https://openai.com/index/gpt-5-1/}
+
+\newpage
+\appendix
+
+# Appendix A: Counties Excluded From Regression Models
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{appendixA_missingdata_table.png}
+\caption{Counties Excluded From Regression Models Due to Missing Data}
+\label{fig:A1}
+\end{figure}
+
+\newpage
+
+# Appendix B: Exploratory Data Analysis
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{poverty_state_boxplot.png}
+\caption{County Poverty Rates by State}
+\label{fig:B1}
+\end{figure}
+
+\vspace{0.5cm}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{poverty_vs_aveage_meancommute.png}
+\caption{County Poverty Versus Average Age and Mean Commute Time}
+\label{fig:B2}
+\end{figure}
+
+\vspace{0.5cm}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{poverty_vs_propwomen.png}
+\caption{County Poverty Versus Percentage Women}
+\label{fig:B3}
+\end{figure}
+
+\vspace{0.5cm}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{poverty_vs_race_ethnicity.png}
+\caption{County Poverty Versus Race/Ethnicity Composition}
+\label{fig:B4}
+\end{figure}
+
+\vspace{0.5cm}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{poverty_vs_work_type.png}
+\caption{County Poverty Versus Work Type Categories}
+\label{fig:B5}
+\end{figure}
+
+\vspace{0.5cm}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{poverty_vs_transportation.png}
+\caption{County Poverty Versus Commuting Modes}
+\label{fig:B6}
+\end{figure}
+
+\newpage
+
+# Appendix C: Assumptions and Diagnostics
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{norm_res_qq.png}
+\caption{Normal Q--Q Plot of Residuals for the Main Regression Model}
+\label{fig:C1}
+\end{figure}
+
+\vspace{0.5cm}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{resid_cor_latlong.png}
+\caption{Spatial Pattern of Residuals by Longitude and Latitude}
+\label{fig:C2}
+\end{figure}
+
+\vspace{0.5cm}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{resid_cor_state.png}
+\caption{Residuals by State}
+\label{fig:C3}
+\end{figure}
+
+\vspace{0.5cm}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{reslevarage_outliers.png}
+\caption{Standardized Residuals Versus Leverage}
+\label{fig:C4}
+\end{figure}
+
+\vspace{0.5cm}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{cooksd_outliers.png}
+\caption{Cook's Distance Values for Influential Counties}
+\label{fig:C5}
+\end{figure}
+
+\vspace{0.5cm}
+
+\begin{table}[H]
+\centering
+\includegraphics[width=0.60\textwidth]{appendixB_vif_table.png}
+\caption{Variance Inflation Factors for Predictors in the Main Regression Model}
+\label{table:C1}
+\end{table}
+
+
+
+```{r, include=FALSE}
 #list all the libraries
 library(tidyverse)
 library(colorspace)
@@ -22,8 +341,10 @@ library(lindia)
 library(sandwich)
 library(lmtest)
 library(knitr)
+library(gt)
+library(car)
 ```
-``` {r}
+```{r, include=FALSE}
                                             # load the dataset
 pvt_d <- read.csv("poverty_data.csv")
 
@@ -141,7 +462,37 @@ na_rows <- pvt_d[rowSums(is.na(pvt_d)) > 0, ]
 
 ```
 
-```{r}
+```{r, include=FALSE}
+
+#get the missing variables
+missing_vars <- c("LessThanHighSchool", "HighSchoolDiploma", "SomeCollegeOrAssociateDegree", "BachelorDegreeOrHigher", "AvgAge", "Long", "Lat", "county_fips")
+
+# abbreviations -> full state names
+state_lookup <- tibble::tibble(State_abbrev = state.abb, State_full   = state.name)
+
+# build a clean data frame of excluded counties
+excluded_df <- pvt_d %>%
+  left_join(state_lookup, by = c("State" = "State_abbrev")) %>%
+  mutate(State_full = ifelse(is.na(State_full), State, State_full)) %>%
+  filter(rowSums(is.na(across(all_of(missing_vars)))) > 0) %>%
+  rowwise() %>%
+  mutate(Missing_variables = paste(missing_vars[is.na(c_across(all_of(missing_vars)))], collapse = ", ")) %>%
+  ungroup() %>%
+  select(State = State_full, County, Missing_variables) %>%
+  arrange(State, County)
+
+#make table
+excluded_table_gt <- excluded_df %>%
+  gt() %>%
+  cols_label(State = "State", County = "County", Missing_variables = "Variables with missing data") %>%
+  tab_header(title = "Counties excluded from regression models due to missing data")
+
+#save
+gt::gtsave(excluded_table_gt, filename = "appendixA_missingdata_table.png", path = ".")
+
+```
+
+```{r, include=FALSE}
 #once again summary statistics
 summary(pvt_d)
 
@@ -355,7 +706,7 @@ wt_pvt_sc <- pvt_d %>%
                       labs(title = "Poverty vs Work Types", x = "Percent in work type (%)", y = "Poverty (%)") +
                       theme_bw()
 
-ggsave("poverty_vs_worktype.png", plot = pop_pvt_ss, width = 10, height = 10, dpi = 300)
+
 
                                   #geography
 
@@ -385,18 +736,14 @@ pop_pvt_ss <- pvt_d %>%
 
 ```
 
-```{r}
+```{r, include=FALSE}
 
 #fit the model including everything first
 
 pvt_lm <- lm(Poverty ~ TotalPop + propWomen + Hispanic + Black + Native +  Asian + Pacific + Service + Office + Construction + Production + Carpool + Transit + Walk + OtherTransp + WorkAtHome + MeanCommute + PublicWork + SelfEmployed + FamilyWork + Unemployment + HighSchoolDiploma + SomeCollegeOrAssociateDegree + BachelorDegreeOrHigher + AvgAge + Long + Lat, data = pvt_d, na.action = na.omit)
-
-table1 <- apa.reg.table(pvt_lm, table.number = 1,filename = "OLS.doc")
-
-apa.save(filename = "OLS.doc", table1)
 ```
 
-```{r}
+```{r, include=FALSE}
 #homoskedasticity
 #residual vs fitted plot for the entire fitted model
 diag_df <- broom::augment(pvt_lm)  
@@ -413,9 +760,6 @@ lm_rf <- diag_df %>%
                     labs(x = "Fitted values (Predicted Poverty %)", y = "Residuals", title = "Residuals vs Fitted Values for Main Model") +
                     theme_bw() 
 
-ggsave("resfit_lm.png", plot = lm_rf, width = 10, height = 10, dpi = 300)
-
-
 
 #normality of residuals
 
@@ -426,7 +770,7 @@ norm_res_hist <- diag_df %>%
                             labs(x = "Residuals", y = "Count", title = "Histogram of residuals for model") +
                             theme_bw()
 
-ggsave("norm_res_hist.png", plot = norm_res_hist, width = 10, height = 10, dpi = 300)
+
 
 #QQ plot
 norm_res_qq <- diag_df %>%
@@ -436,7 +780,6 @@ norm_res_qq <- diag_df %>%
                         labs(x = "Theoretical quantiles", y = "Sample quantiles (standardized residuals)", title = "Normal Q–Q plot of residuals") +
                         theme_bw()
 
-ggsave("norm_res_qq.png", plot = norm_res_qq, width = 10, height = 10, dpi = 300)
 
 #residual correlation
 #residual scatterplot by latlong
@@ -448,7 +791,6 @@ resid_cor_latlong <- diag_df %>%
                         labs(x = "Longitude", y = "Latitude", color = "Residual", title = "Spatial pattern of residuals from model") +
                         theme_bw()
 
-ggsave("resid_cor_latlong.png", plot = resid_cor_latlong, width = 10, height = 10, dpi = 300)
 
 #residual boxplot per state
 resid_cor_state <- diag_df %>%
@@ -459,20 +801,17 @@ resid_cor_state <- diag_df %>%
                               theme_bw() +
                               theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
-ggsave("resid_cor_state.png", plot = resid_cor_state, width = 10, height = 10, dpi = 300)
+
 
 #outliers
 
 #plots
-diag_plots <- gg_diagnose(diag_df, plot.all = FALSE)
+diag_plots <- gg_diagnose(pvt_lm, plot.all = FALSE)
 names(diag_plots)
 
 diag_plots$resleverage
 diag_plots$cooksd
 
-ggsave("reslevarage_outliers.png", plot = diag_plots$resleverage, width = 10, height = 10, dpi = 300)
-
-ggsave("cooksd_outliers.png", plot = diag_plots$cooksd, width = 10, height = 10, dpi = 300)
 
 # how many big standardized residuals?
 sum(abs(diag_df$.std.resid) > 2)
@@ -486,11 +825,30 @@ cook_cut <- 4 / (n - p - 1)
 sum(diag_df$.cooksd > cook_cut)
 
 #colinearity
-vif(pvt_lm)
+vif_vals <- car::vif(pvt_lm)
+
+#turn it into dataframe
+vif_df <- vif_vals %>%
+          as.data.frame() %>%
+          tibble::rownames_to_column(var = "Predictor") %>%
+          dplyr::rename(VIF = 2) %>%
+          dplyr::mutate(Flag = dplyr::if_else(VIF >= 5, "High (≥ 5)", ""))
+
+#make table
+vif_table <- vif_df %>%
+             gt() %>%
+             cols_label(Predictor = "Predictor", VIF = "VIF", Flag = "Note") %>%
+             fmt_number(columns = VIF, decimals = 2) %>%
+             tab_header(title = "Variance Inflation Factors Table for Checking Colinearity") %>%
+             cols_align(align = "left", columns = Predictor) %>%
+             cols_align(align = "center", columns = c(VIF, Flag))
+
+#save
+gt::gtsave(vif_table, filename = "appendixB_vif_table.png", path = ".")
 
 ```
 
-```{r}
+```{r, include=FALSE}
 #use robust standard errors
 
 #compute a robust covariate matrix
@@ -515,19 +873,15 @@ t_crit <- qt(1 - alpha/2, df = df.residual(pvt_lm))
 robust_tidy$conf.low  <- robust_tidy$estimate - t_crit * robust_tidy$std.error
 robust_tidy$conf.high <- robust_tidy$estimate + t_crit * robust_tidy$std.error
 
-#use this for reporting
-knitr::kable(robust_tidy, digits = 3)
-
-table2 <- apa.reg.table(robust_tidy, table.number = 1, filename = "regression_robust_se.doc")
-apa.save(filename = "regression_robust_se.doc", robust_tidy)
 
 ```
-```{r}
+```{r, include=FALSE}
 #multiple testing
 
-#define the family of hypotheses for RQ1: socio-demographic + economic predictors, TotalPop, Long, Lat as controls
+#define the family of hypotheses for RQ1
 
-rq1_family <- c("propWomen", "Hispanic", "Black", "Native", "Asian", "Pacific", "Service", "Office", "Construction", "Production", "Carpool", "Transit", "Walk", "OtherTransp", "WorkAtHome", "PublicWork", "SelfEmployed", "FamilyWork", "Unemployment", "HighSchoolDiploma", "SomeCollegeOrAssociateDegree", "BachelorDegreeOrHigher", "AvgAge", "MeanCommute")
+rq1_family <- c("TotalPop", "propWomen", "Hispanic", "Black", "Native", "Asian", "Pacific", "Service", "Office", "Construction", "Production", "Carpool", "Transit", "Walk", "OtherTransp", "WorkAtHome", "PublicWork", "SelfEmployed", "FamilyWork", "Unemployment", "HighSchoolDiploma", "SomeCollegeOrAssociateDegree", "BachelorDegreeOrHigher", "AvgAge", "MeanCommute","Lat", "Long")
+
 
 
 rq1_results <- robust_tidy %>%
@@ -540,14 +894,29 @@ rq1_results <- rq1_results %>%
 
 rq1_results[order(rq1_results$p_BH), ]
 
-subset(rq1_results, sig_BH_05)
-subset(rq1_results, !sig_BH_05)
-
-
 
 ```
 
-```{r}
+```{r, include=FALSE}
+
+#regression table for RQ1
+rq1_table <- rq1_results %>%
+                        dplyr::mutate(ci_95 = sprintf("[%.2f, %.2f]", conf.low, conf.high), p_raw_f = dplyr::if_else(p_raw < .001, "< .001", sprintf("%.3f", p_raw)), p_BH_f  = dplyr::if_else(p_BH  < .001, "< .001", sprintf("%.3f", p_BH))) %>%
+                        dplyr::select(term, estimate, std.error, statistic,p_raw = p_raw_f, p_BH  = p_BH_f, `95% CI` = ci_95) %>%
+                        gt() %>%
+                        cols_label(term = "Predictor", estimate  = "Estimate", std.error = "SE (robust)", statistic = "t", p_raw = "p (raw)", p_BH = "p (BH-adjusted)", `95% CI` = "95% CI") %>%
+                        fmt_number(columns = c(estimate, std.error, statistic), decimals = 3) %>%
+                        tab_header(title = "RQ1: County Poverty Regressed on Demographic, Geographic, and Socioeconomic Predictors") %>%
+                        cols_align(align = "left", columns = term) %>%
+                        cols_align(align = "center", columns = c(estimate, std.error, statistic, p_raw, p_BH, `95% CI`))
+
+
+#save
+gt::gtsave(rq1_table, filename = "rq1_reg_table.png", path = ".")
+
+```
+
+```{r, include=FALSE}
 #RQ2 CA vs TX
 
 #subset to CA and TX
@@ -571,43 +940,59 @@ rq2_lm <- lm(Poverty ~ propWomen_c * State + Unemployment + HighSchoolDiploma + 
 vcov_robust_rq2 <- vcovHC(rq2_lm, type = "HC3")
 rq2_ct <- coeftest(rq2_lm, vcov. = vcov_robust_rq2)
 
-rq2_tidy <- broom::tidy(rq2_lm)
+rq2_raw <- broom::tidy(rq2_lm)
 rq2_se <- sqrt(diag(vcov_robust_rq2))
 
-rq2_tidy$std.error <- rq2_se
-rq2_tidy$statistic <- rq2_tidy$estimate / rq2_tidy$std.error
-rq2_tidy$p.value <- 2 * pt(abs(rq2_tidy$statistic), df = df.residual(rq2_lm), lower.tail = FALSE)
+rq2_raw$std.error <- rq2_se
+rq2_raw$statistic <- rq2_raw$estimate / rq2_raw$std.error
+rq2_raw$p.value <- 2 * pt(abs(rq2_raw$statistic), df = df.residual(rq2_lm), lower.tail = FALSE)
 
 # 95% robust CI
 alpha <- 0.05
 tcrit_rq2 <- qt(1 - alpha/2, df = df.residual(rq2_lm))
 
-rq2_tidy$conf.low  <- rq2_tidy$estimate - tcrit_rq2 * rq2_tidy$std.error
-rq2_tidy$conf.high <- rq2_tidy$estimate + tcrit_rq2 * rq2_tidy$std.error
-
-#see the key rows: propwomen and interaction
-rq2_tidy %>%
-            filter(term %in% c("propWomen_c", "StateTX", "propWomen_c:StateTX")) %>%
-                                        knitr::kable(digits = 3)
+rq2_raw$conf.low  <- rq2_raw$estimate - tcrit_rq2 * rq2_raw$std.error
+rq2_raw$conf.high <- rq2_raw$estimate + tcrit_rq2 * rq2_raw$std.error
+```
 
 
-#compute simole slopes for CA and TX
-#extract coefficients & robust vcov
+```{r, include=FALSE}
+# regression table 2
+rq2_table_raw <- rq2_raw %>%
+                        dplyr::mutate(ci_95 = sprintf("[%.2f, %.2f]", conf.low, conf.high), p_fmt = dplyr::if_else(p.value < .001, "< .001", sprintf("%.3f", p.value))) %>%
+                        dplyr::select(term,estimate, std.error, statistic, p = p_fmt, `95% CI` = ci_95) %>%
+                        gt() %>%
+                        cols_label(term = "Predictor", estimate = "Estimate", std.error = "SE (robust)", statistic = "t", p = "p", `95% CI` = "95% CI") %>%
+                        fmt_number(columns = c(estimate, std.error, statistic), decimals = 3) %>%
+                        tab_header(title = "County Poverty Regressed on Gender Composition, State, and Controls",) %>%
+                        cols_align(align = "left", columns = term) %>%
+                        cols_align(align = "center",columns = c(estimate, std.error, statistic, p, `95% CI`))
+
+      
+#save
+gt::gtsave(rq2_table_raw, filename = "rq2_rawreg_table.png", path = ".")
+
+```
+
+
+```{r, include=FALSE}
+#compute simole slopes for CA and TX for final regression table
+# extract coefficients & robust vcov
 b2 <- coef(rq2_lm)
 V2 <- vcov_robust_rq2
 
-# Indices for relevant terms
-i_pw <- which(names(b2) == "propWomen_c")
+
+i_pw  <- which(names(b2) == "propWomen_c")
 i_int <- which(names(b2) == "propWomen_c:StateTX")
 
-# Slope in CA (reference state)
+# slope in CA
 slope_CA <- b2[i_pw]
 se_CA <- sqrt(V2[i_pw, i_pw])
 t_CA <- slope_CA / se_CA
 p_CA <- 2 * pt(abs(t_CA), df = df.residual(rq2_lm), lower.tail = FALSE)
 CI_CA <- slope_CA + c(-1, 1) * tcrit_rq2 * se_CA
 
-#slope in TX = propWomen_c + interaction
+# slope in TX 
 slope_TX <- b2[i_pw] + b2[i_int]
 var_TX <- V2[i_pw, i_pw] + V2[i_int, i_int] + 2 * V2[i_pw, i_int]
 se_TX <- sqrt(var_TX)
@@ -615,14 +1000,38 @@ t_TX <- slope_TX / se_TX
 p_TX <- 2 * pt(abs(t_TX), df = df.residual(rq2_lm), lower.tail = FALSE)
 CI_TX <- slope_TX + c(-1, 1) * tcrit_rq2 * se_TX
 
-data.frame(State = c("CA", "TX"), Slope = c(slope_CA, slope_TX),SE_robust = c(se_CA, se_TX), t_value    = c(t_CA, t_TX), p_value = c(p_CA, p_TX), CI_low = c(CI_CA[1], CI_TX[1]), CI_high = c(CI_CA[2], CI_TX[2])) %>% knitr::kable(digits = 3)
+# interaction term
+diff_est <- b2[i_int]
+se_diff <- sqrt(V2[i_int, i_int])
+t_diff <- diff_est / se_diff
+p_diff <- 2 * pt(abs(t_diff), df = df.residual(rq2_lm), lower.tail = FALSE)
+CI_diff <- diff_est + c(-1, 1) * tcrit_rq2 * se_diff
 
+# simple slopes and interaction
+rq2_slopes <- tibble::tibble(term = c("CA", "TX",
+                "CA:TX"), estimate = c(slope_CA, slope_TX, diff_est), std.error = c(se_CA, se_TX, se_diff), statistic = c(t_CA, t_TX, t_diff), p.value = c(p_CA, p_TX, p_diff), conf.low  = c(CI_CA[1], CI_TX[1], CI_diff[1]), conf.high = c(CI_CA[2], CI_TX[2], CI_diff[2]))
 
-#interaction term
-rq2_tidy %>% filter(term == "propWomen_c:StateTX") %>% knitr::kable(digits = 3)
+# controls come from rq2_raw 
+controls_tidy <- rq2_raw %>% dplyr::filter(!term %in% c("(Intercept)", "propWomen_c", "StateTX", "propWomen_c:StateTX"))
 
-
+# final table tidy
+rq2_tidy <- dplyr::bind_rows(rq2_slopes, controls_tidy)
 
 ```
 
-Use gt package for all the tabulations
+```{r, include=FALSE}
+
+rq2_table_tidy <- rq2_tidy %>%
+                        dplyr::mutate(ci_95 = sprintf("[%.2f, %.2f]", conf.low, conf.high), p_fmt = dplyr::if_else(p.value < .001, "< .001", sprintf("%.3f", p.value))) %>%
+                        dplyr::select(term, estimate, std.error, statistic, p = p_fmt, `95% CI` = ci_95) %>%
+                        gt() %>%
+                        cols_label(term = "Predictor", estimate  = "Estimate", std.error = "SE (robust)", statistic = "t", p = "p", `95% CI` = "95% CI") %>%
+                        fmt_number(columns = c(estimate, std.error, statistic), decimals = 3) %>%
+                        tab_header(title = "RQ2: Simple Slopes and Interaction of Gender Composition by State and Controls") %>%
+                        cols_align(align = "left", columns = term) %>%
+                        cols_align(align = "center", columns = c(estimate,std.error, statistic, p, `95% CI`))
+
+#save
+gt::gtsave(rq2_table_tidy, filename = "rq2_tidyreg_table.png", path = ".")
+
+```
